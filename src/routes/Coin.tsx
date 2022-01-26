@@ -3,6 +3,9 @@ import styled from "styled-components";
 import {useState,useEffect} from 'react';
 import Price from "./Price";
 import Chart from "./Chart";
+import { useQuery } from "react-query";
+import { fetchCoinInfo, fetchCoinTicker } from "../api";
+import { Helmet } from "react-helmet";
 
 interface RouteParams{
     coinId:string;
@@ -67,6 +70,9 @@ interface PriceData {
   };
 }
 
+interface IcoinProps{
+  isDark : boolean;
+}
 
 const Container = styled.div`
     padding : 0px 20px;
@@ -142,59 +148,49 @@ const Title = styled.h1`
 
 
 
-function Coin(){
-    const [loading,setLoading] = useState(true);
-    const {coinId} = useParams<RouteParams>();
-    const {state} = useLocation<RouteState>();
-    const [info,setInfo] = useState<InfoData>();
-    const [priceInfo,setPriceInfo] = useState<PriceData>();
-    const priceMatch = useRouteMatch("/:coinId/price");
-    const chartMatch = useRouteMatch("/:coinId/chart");
-    useEffect(() => {
-      (async() => {
-        const infoData = await (
-          await fetch(`https://api.coinpaprika.com/v1/coins/${coinId}`)
-        ).json();
-
-        const priceData = await(
-          await fetch(`https://api.coinpaprika.com/v1/tickers/${coinId}`)
-        ).json();
-
-        setInfo(infoData);
-        setPriceInfo(priceData);
-        setLoading(false);
-      })()
-    },[coinId])
+function Coin({isDark} : IcoinProps){
+     const {coinId} = useParams<RouteParams>();
+     const {state} = useLocation<RouteState>();
+     const priceMatch = useRouteMatch("/:coinId/price");
+     const chartMatch = useRouteMatch("/:coinId/chart");
+     const {isLoading :infoLoading, data:infoData} = useQuery<InfoData>(["info",coinId],() => fetchCoinInfo(coinId));
+     const {isLoading :tickersLoading, data:tickersData} = useQuery<PriceData>(["tickers",coinId],() => fetchCoinTicker(coinId),{refetchInterval : 5000});
+     const loading = infoLoading || tickersLoading;
     return(
         <Container>
+              <Helmet>
+                <title>{state?.name ? state.name : loading ? "Loading" : infoData?.name}</title>
+              </Helmet>
               <Header>
-                <Title>{state?.name ? state.name : loading ? "Loading" : info?.name}</Title>
+                <Link to="/">
+                  <Title>{state?.name ? state.name : loading ? "Loading" : infoData?.name}</Title>
+                </Link>
               </Header>
               {loading ? (<Loader>Loading...</Loader>) :(
               <>
               <Overview>
                 <OverviewItem>
                   <span>RANK:</span>
-                  <span>{info?.rank}</span>
+                  <span>{infoData?.rank}</span>
                 </OverviewItem>
                 <OverviewItem>
                   <span>SYMBOL:</span>
-                  <span>{info?.symbol}</span>
+                  <span>{infoData?.symbol}</span>
                 </OverviewItem>
                 <OverviewItem>
                   <span>OPEN SOURCE:</span>
-                  <span>{info?.open_source ? "Yes" : "No"}</span>
+                  <span>{`$${tickersData?.quotes.USD.price.toFixed(3)}`}</span>
                 </OverviewItem>
               </Overview>
-              <Description>{info?.description}</Description>
+              <Description>{infoData?.description}</Description>
               <Overview>
                 <OverviewItem>
                   <span>TOTAL SUPPLY</span>
-                  <span>{priceInfo?.total_supply}</span>
+                  <span>{tickersData?.total_supply}</span>
                 </OverviewItem>
                 <OverviewItem>
                   <span>MAX SUPPLY</span>
-                  <span>{priceInfo?.max_supply}</span>
+                  <span>{tickersData?.max_supply}</span>
                 </OverviewItem>
               </Overview>
 
@@ -209,10 +205,10 @@ function Coin(){
 
               <Switch>
                 <Route path={`/:coinId/price`}>
-                  <Price/>
+                  <Price coinId={coinId}/>
                 </Route>
                 <Route path={`/:coinId/chart`}>
-                  <Chart />
+                  <Chart isDark={isDark} coinId={coinId}/>
                 </Route>
               </Switch>
           </>
